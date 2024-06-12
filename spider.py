@@ -4,7 +4,7 @@
 Author: Hmily
 GitHub: https://github.com/ihmily
 Date: 2023-07-15 23:15:00
-Update: 2024-05-10 12:25:33
+Update: 2024-06-11 22:16:51
 Copyright (c) 2023 by Hmily, All Rights Reserved.
 Function: Get live stream data.
 """
@@ -228,11 +228,15 @@ def get_tiktok_stream_data(url: str, proxy_addr: Union[str, None] = None, cookie
     for i in range(3):
         html_str = get_req(url=url, proxy_addr=proxy_addr, headers=headers, abroad=True)
         time.sleep(1)
+        if 'We regret to inform you that we have discontinued operating TikTok' in html_str:
+            msg = re.search('<p>\n\s+(We regret to inform you that we have discontinu.*?)\.\n\s+</p>', html_str)
+            raise ConnectionError(
+                f'你的代理节点地区网络被禁止访问TikTok，请切换其他地区的节点访问 {msg.group(1) if msg else ""}')
         if 'UNEXPECTED_EOF_WHILE_READING' not in html_str:
             try:
                 json_str = re.findall(
-                    '<script id="SIGI_STATE" type="application/json">(.*?)</script><script id="SIGI_RETRY" type="application/json">',
-                    html_str)[0]
+                    '<script id="SIGI_STATE" type="application/json">(.*?)</script>',
+                    html_str, re.S)[0]
             except Exception:
                 raise ConnectionError("请检查你的网络是否可以正常访问TikTok网站")
             json_data = json.loads(json_str)
@@ -1616,34 +1620,49 @@ def get_baidu_stream_data(url: str, proxy_addr: Union[str, None] = None, cookies
 @trace_error_decorator
 def get_weibo_stream_url(url: str, proxy_addr: Union[str, None] = None, cookies: Union[str, None] = None) -> \
         Dict[str, Any]:
+
     headers = {
         'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
-        'Connection': 'keep-alive',
-        'Referer': 'https://live.baidu.com/',
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 8.0.0; SM-G955U Build/R16NW) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36 Edg/121.0.0.0',
+        'Cookie': 'XSRF-TOKEN=qAP-pIY5V4tO6blNOhA4IIOD; SUB=_2AkMRNMCwf8NxqwFRmfwWymPrbI9-zgzEieKnaDFrJRMxHRl-yT9kqmkhtRB6OrTuX5z9N_7qk9C3xxEmNR-8WLcyo2PM; SUBP=0033WrSXqPxfM72-Ws9jqgMF55529P9D9WWemwcqkukCduUO11o9sBqA; WBPSESS=Wk6CxkYDejV3DDBcnx2LOXN9V1LjdSTNQPMbBDWe4lO2HbPmXG_coMffJ30T-Avn_ccQWtEYFcq9fab1p5RR6PEI6w661JcW7-56BszujMlaiAhLX-9vT4Zjboy1yf2l',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
     }
     if cookies:
         headers['Cookie'] = cookies
 
-    room_id = url.split('?')[0].split('show/')[1]
+    room_id = ''
+    if 'show/' in url:
+        room_id = url.split('?')[0].split('show/')[1]
+    else:
+        uid = url.split('?')[0].rsplit('/u/', maxsplit=1)[1]
+        web_api = f'https://weibo.com/ajax/statuses/mymblog?uid={uid}&page=1&feature=0'
+        json_str = get_req(web_api, proxy_addr=proxy_addr, headers=headers)
+        json_data = json.loads(json_str)
+        for i in json_data['data']['list']:
+            if 'page_info' in i and i['page_info']['object_type'] == 'live':
+                room_id = i['page_info']['object_id']
+                print(room_id)
+                break
 
-    app_api = f'https://weibo.com/l/pc/anchor/live?live_id={room_id}'
-    # app_api = f'https://weibo.com/l/!/2/wblive/room/show_pc_live.json?live_id={room_id}'
-    json_str = get_req(url=app_api, proxy_addr=proxy_addr, headers=headers)
-    json_data = json.loads(json_str)
-
-    anchor_name = json_data['data']['user_info']['name']
     result = {
-        "anchor_name": anchor_name,
+        "anchor_name": '',
         "is_live": False,
     }
-    live_status = json_data['data']['item']['status']
-    if live_status == 1:
-        result["is_live"] = True
-        play_url_list = json_data['data']['item']['stream_info']['pull']
-        result['m3u8_url'] = play_url_list['live_origin_hls_url']
-        result['flv_url'] = play_url_list['live_origin_flv_url']
-        result['record_url'] = play_url_list['live_origin_hls_url']
+    if room_id:
+        app_api = f'https://weibo.com/l/pc/anchor/live?live_id={room_id}'
+        # app_api = f'https://weibo.com/l/!/2/wblive/room/show_pc_live.json?live_id={room_id}'
+        json_str = get_req(url=app_api, proxy_addr=proxy_addr, headers=headers)
+        json_data = json.loads(json_str)
+
+        anchor_name = json_data['data']['user_info']['name']
+        result["anchor_name"] = anchor_name
+        live_status = json_data['data']['item']['status']
+
+        if live_status == 1:
+            result["is_live"] = True
+            play_url_list = json_data['data']['item']['stream_info']['pull']
+            result['m3u8_url'] = play_url_list['live_origin_hls_url']
+            result['flv_url'] = play_url_list['live_origin_flv_url']
+            result['record_url'] = play_url_list['live_origin_hls_url']
 
     return result
 
@@ -1669,12 +1688,13 @@ def get_kugou_stream_url(url: str, proxy_addr: Union[str, None] = None, cookies:
 
     json_str = get_req(url=app_api, proxy_addr=proxy_addr, headers=headers)
     json_data = json.loads(json_str)
-
     anchor_name = json_data['data']['normalRoomInfo']['nickName']
     result = {
         "anchor_name": anchor_name,
         "is_live": False,
     }
+    if not anchor_name:
+        raise RuntimeError('不支持音乐频道直播间录制，请切换直播间录制')
     live_status = json_data['data']['liveType']
     if live_status == 0:
         params = {
@@ -1696,7 +1716,7 @@ def get_kugou_stream_url(url: str, proxy_addr: Union[str, None] = None, cookies:
         stream_data = json_data2['data']['lines']
         if stream_data:
             result["is_live"] = True
-            result['flv_url'] = stream_data[1]['streamProfiles'][0]['httpsFlv'][0]
+            result['flv_url'] = stream_data[-1]['streamProfiles'][0]['httpsFlv'][0]
             result['record_url'] = result['flv_url']
 
     return result
@@ -1992,7 +2012,7 @@ if __name__ == '__main__':
     # room_url = 'https://www.popkontv.com/channel/notices?mcid=wjfal007&mcPartnerCode=P-00117'  # popkontv
     # room_url = 'https://twitcasting.tv/c:uonq'  # TwitCasting
     # room_url = 'https://live.baidu.com/m/media/pclive/pchome/live.html?room_id=9175031377&tab_category'  # 百度直播
-    # room_url = 'https://weibo.com/l/wblive/p/show/1022:2321325026370190442592'  # 微博直播
+    # room_url = 'https://weibo.com/u/7849520225'  # 微博直播
     # room_url = 'https://fanxing2.kugou.com/50428671?refer=2177&sourceFrom='  # 酷狗直播
     # room_url = 'https://www.twitch.tv/gamerbee'  # TwitchTV
     # room_url = 'https://www.liveme.com/zh/v/17141937295821012854/index.html'  # LiveMe
