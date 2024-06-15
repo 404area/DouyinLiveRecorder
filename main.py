@@ -1012,6 +1012,7 @@ def start_record(url_data: tuple, count_variable: int = -1):
                                 url=record_url,
                                 proxy_addr=proxy_address,
                                 cookies=twitcasting_cookie,
+                                account_type=twitcasting_account_type,
                                 username=twitcasting_username,
                                 password=twitcasting_password
                             )
@@ -1756,6 +1757,7 @@ while True:
     popkontv_username = read_config_value(config, '账号密码', 'popkontv账号', '')
     popkontv_partner_code = read_config_value(config, '账号密码', 'partner_code', 'P-00001')
     popkontv_password = read_config_value(config, '账号密码', 'popkontv密码', '')
+    twitcasting_account_type = read_config_value(config, '账号密码', 'twitcasting账号类型', 'normal')
     twitcasting_username = read_config_value(config, '账号密码', 'twitcasting账号', '')
     twitcasting_password = read_config_value(config, '账号密码', 'twitcasting密码', '')
     popkontv_access_token = read_config_value(config, 'Authorization', 'popkontv_token', '')
