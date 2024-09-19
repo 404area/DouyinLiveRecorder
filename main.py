@@ -4,7 +4,7 @@
 Author: Hmily
 GitHub: https://github.com/ihmily
 Date: 2023-07-17 23:52:05
-Update: 2024-09-14 12:18:00
+Update: 2024-09-19 01:50:12
 Copyright (c) 2023-2024 by Hmily, All Rights Reserved.
 Function: Record live stream video.
 """
@@ -72,7 +72,7 @@ from utils import (
     logger, check_md5,
     trace_error_decorator
 )
-from msg_push import dingtalk, xizhi, tg_bot
+from msg_push import dingtalk, xizhi, tg_bot, email_message
 
 version = "v3.0.7"
 platforms = ("\n国内站点：抖音|快手|虎牙|斗鱼|YY|B站|小红书|bigo|blued|网易CC|千度热播|猫耳FM|Look|TwitCasting|百度|微博|"
@@ -634,6 +634,9 @@ def push_message(content: str) -> Union[str, list]:
     if '钉钉' in live_status_push:
         push_pts.append('钉钉')
         dingtalk(dingtalk_api_url, content, dingtalk_phone_num)
+    if '邮箱' in live_status_push:
+        push_pts.append('邮箱')
+        email_message(mail_host, mail_password, from_email, to_email, "直播间状态更新通知", content)
     if 'TG' in live_status_push or 'tg' in live_status_push:
         push_pts.append('TG')
         tg_bot(tg_chat_id, tg_token, content)
@@ -673,6 +676,7 @@ def start_record(url_data: tuple, count_variable: int = -1):
                             proxy_address = proxy_addr_bak if proxy_addr_bak else None
 
             # print(f'\r代理地址:{proxy_address}')
+            # print(f'\r全局代理:{global_proxy}')
             print(f"\r运行新线程,传入地址 {record_url}")
             while True:
                 try:
@@ -1108,10 +1112,12 @@ def start_record(url_data: tuple, count_variable: int = -1):
                                     "-correct_ts_overflow", "1",
                                 ]
 
-                                add_headers_list = ['PandaTV', '千度热播']
+                                add_headers_list = ['PandaTV', '千度热播', 'WinkTV']
                                 if platform in add_headers_list:
                                     if platform == 'PandaTV':
                                         headers = 'origin:https://www.pandalive.co.kr'
+                                    elif platform == 'WinkTV':
+                                        headers = 'origin:https://www.winktv.co.kr'
                                     else:
                                         headers = 'referer:https://qiandurebo.com'
                                     ffmpeg_command.insert(11, "-headers")
@@ -1667,12 +1673,16 @@ while True:
     enable_proxy_platform_list = enable_proxy_platform.replace('，', ',').split(',') if enable_proxy_platform else None
     extra_enable_proxy = read_config_value(config, '录制设置', '额外使用代理录制的平台（逗号分隔）', '')
     extra_enable_proxy_platform_list = extra_enable_proxy.replace('，', ',').split(',') if extra_enable_proxy else None
-    live_status_push = read_config_value(config, '推送配置', '直播状态通知(可选微信|钉钉|tg或者都填)', "")
+    live_status_push = read_config_value(config, '推送配置', '直播状态通知(可选微信|钉钉|tg|邮箱或者都填)', "")
     dingtalk_api_url = read_config_value(config, '推送配置', '钉钉推送接口链接', "")
     xizhi_api_url = read_config_value(config, '推送配置', '微信推送接口链接', "")
     dingtalk_phone_num = read_config_value(config, '推送配置', '钉钉通知@对象(填手机号)', "")
     tg_token = read_config_value(config, '推送配置', 'tgapi令牌', "")
     tg_chat_id = read_config_value(config, '推送配置', 'tg聊天id(个人或者群组id)', "")
+    mail_host = read_config_value(config, '推送配置', 'SMTP邮件服务器', "")
+    from_email = read_config_value(config, '推送配置', '发件人邮箱', "")
+    mail_password = read_config_value(config, '推送配置', '发件人密码(授权码)', "")
+    to_email = read_config_value(config, '推送配置', '收件人邮箱', "")
     begin_push_message_text = read_config_value(config, '推送配置', '自定义开播推送内容', "")
     over_push_message_text = read_config_value(config, '推送配置', '自定义关播推送内容', "")
     disable_record = options.get(read_config_value(config, '推送配置', '只推送通知不录制（是/否）', "否"), False)
